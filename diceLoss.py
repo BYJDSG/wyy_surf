@@ -1,38 +1,26 @@
 import torch
-from torch.autograd import Function
 
+def dice_loss(input, target, eps=1e-6):
+    """
+    Compute the Dice coefficient for two float tensors.
 
-class DiceCoeff(Function):
-    """Dice coeff for individual examples"""
-    def forward(self, input, target):
-        self.save_for_backward(input, target)
-        eps = 0.0001
-        self.inter = torch.dot(input.view(-1), target.view(-1))
-        self.union = torch.sum(input) + torch.sum(target) + eps
-        t = (2 * self.inter.float() + eps) / self.union.float()
-        return t
+    Args:
+        input (torch.Tensor): Predicted tensor.
+        target (torch.Tensor): Ground truth tensor.
+        eps (float): A small constant to avoid division by zero.
 
+    Returns:
+        float: Dice coefficient.
+    """
+    # Flatten the input and target tensors
+    input_flat = input.view(-1)
+    target_flat = target.view(-1)
 
-    # This function has only a single output, so it gets only one gradient
-    def backward(self, grad_output):
-        input, target = self.saved_variables
-        grad_input = grad_target = None
+    # Calculate intersection and union
+    intersection = torch.sum(input_flat * target_flat)
+    union = torch.sum(input_flat) + torch.sum(target_flat)
 
-        if self.needs_input_grad[0]:
-            grad_input = grad_output * 2 * (target * self.union - self.inter) / (self.union * self.union)
-        
-        if self.needs_input_grad[1]:
-            grad_target = None
-        return grad_input, grad_target
-
-
-def dice_coeff(input, target):
-    """Dice coeff for batches"""
-    if input.is_cuda:
-        s = torch.FloatTensor(1).cuda().zero_()
-    else:
-        s = torch.FloatTensor(1).zero_()
-
-    for i, c in enumerate(zip(input, target)):
-        s = s + DiceCoeff().forward(c[0], c[1])
-    return s / (i + 1)
+    # Calculate Dice coefficient
+    dice = (2. * intersection + eps) / (union + eps)
+    
+    return 1 - dice.item()
